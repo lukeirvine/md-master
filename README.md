@@ -8,7 +8,12 @@ A Notion-style editor for Markdown files in VS Code. You never see markdown synt
 - Highlight text to get the formatting toolbar (turn into, link, bold, italic, strike, code).
 - Type `/` on a new line for the block menu.
 - Hover a block for the `+` (add block below) and `⋮⋮` (drag to move) handles.
-- Need the raw file? Click the `<>` icon in the editor title bar, or right-click the file → **Open as Raw Markdown**.
+- Click the list icon in the editor title bar (or ⌃⌘O) for an **outline** of every heading. Click one to jump
+  there. The heading you're reading is highlighted, and the sidebar stays open or closed across files and restarts.
+- Need the raw file? Click the `<>` icon in the editor title bar (or ⌃⌘E), or right-click the file →
+  **Open as Raw Markdown**. Your cursor lands in the same spot in the raw text.
+- Back from raw: click the pencil icon in the title bar of any `.md` text editor.
+- ⌘+click a link to open it. Links to other files open them in VS Code, and `#heading` links jump within the page.
 
 ## Diffs
 
@@ -37,8 +42,22 @@ but "Compare with…" between two files won't.
 | Toggle to-do checkbox | ⌘Enter |
 | Open link | ⌘+click |
 | Indent / outdent list item | Tab / ⇧Tab |
+| Turn heading / code block back into text | Backspace at its start |
+| Toggle outline sidebar | ⌃⌘O (Ctrl+Alt+O on Windows/Linux) |
+| Open as raw markdown | ⌃⌘E (Ctrl+Alt+E on Windows/Linux) |
 
 Markdown shortcuts work as you type: `# `, `## `, `- `, `1. `, `[] `, `> `, ` ``` `, `---`, `**bold**`, `*italic*`, `` `code` ``.
+
+## Settings
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `mdMaster.maxWidth` | `760` | Width (px) of the writing column. |
+| `mdMaster.fontFamily` | (system sans) | Font for the editor. |
+| `mdMaster.fontSize` | `16` | Base font size (px). |
+
+Bold text and links take their colours from your theme (the Explorer's "modified file" colour and the
+link colour), so they match the rest of VS Code.
 
 ## How it treats your files
 
@@ -47,6 +66,7 @@ Markdown shortcuts work as you type: `# `, `## `, `- `, `1. `, `[] `, `> `, ` ``
 - Raw HTML and `<!-- comments -->` are kept as-is (shown as grey blocks).
 - Pasted or dropped images are saved to `./assets/` next to the file.
 - On first edit, the file's markdown style gets normalized (e.g. `*` bullets become `-`).
+- Files you can't write to (e.g. an old git revision) open read-only.
 
 ## Develop
 
