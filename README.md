@@ -21,6 +21,7 @@ Opening a changed `.md` file from Source Control (or Timeline, or "Compare with�
 side-by-side rich diff: removed content in red on the left, added content in green on the right,
 using your theme's diff colours. Scrolling is synced, ↑/↓ in the top bar jump between changes.
 The historical side is read-only; if both sides are real files, both stay editable.
+The outline shows once, on the far right, listing the new version's headings.
 
 This uses VS Code's proposed `customEditorDiffs` API, enabled via `~/.vscode/argv.json`:
 

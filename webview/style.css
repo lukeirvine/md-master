@@ -1094,13 +1094,41 @@ body.diff-mode #outline {
   white-space: normal;
 }
 
+/* Side-by-side diff: one outline for the pair. It lives on the modified side (current headings,
+   editable file) and docks on the far right, so it doesn't sit between the two documents.
+   Clicking a heading scrolls this side and scroll sync brings the other side along. */
+body.diff-original #outline {
+  display: none;
+}
+body.diff-original.outline-open {
+  padding-left: 0;
+}
+body.diff-modified.outline-open {
+  padding-left: 0;
+  padding-right: var(--mm-outline-width);
+}
+body.diff-modified #outline {
+  left: auto;
+  right: 0;
+  border-right: none;
+  border-left: 1px solid var(--mm-border);
+  transform: translateX(100%);
+}
+body.diff-modified.outline-open #outline {
+  transform: none;
+}
+
 /* not enough room beside the page: float over it instead of pushing it aside */
 @media (max-width: 760px) {
-  body.outline-open {
+  body.outline-open,
+  body.diff-modified.outline-open {
     padding-left: 0;
+    padding-right: 0;
   }
-  body.outline-open #outline {
+  body.outline-open #outline,
+  body.diff-modified.outline-open #outline {
     box-shadow: var(--mm-pop-shadow);
+    border-left: none;
     border-right: none;
   }
 }
