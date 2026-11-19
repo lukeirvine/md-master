@@ -12,6 +12,7 @@ import { SlashCommand, openSlash } from './slashMenu';
 import { MdImage, RawHtmlBlock, RawHtmlInline, NotionKeys, TightTaskLists, setBaseUri } from './nodes';
 import { ICONS } from './blocks';
 import { MdText } from './escaping';
+import { DiffHighlight, DiffController } from './diff';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -30,6 +31,8 @@ interface Settings {
 
 let editor: Editor | null = null;
 let bubble: BubbleMenu | null = null;
+let diff: DiffController | null = null;
+let readOnly = false;
 let frontmatter = '';
 let eol = '\n';
 let trailingNewline = true;
@@ -111,6 +114,7 @@ function renderFrontmatter() {
   ta.className = 'fm-text';
   ta.value = yaml;
   ta.spellcheck = false;
+  ta.readOnly = readOnly;
   const autosize = () => {
     ta.style.height = 'auto';
     ta.style.height = ta.scrollHeight + 'px';
@@ -253,6 +257,7 @@ function applySettings(s: Settings) {
 function createEditor(body: string) {
   const ed = new Editor({
     element: document.getElementById('editor')!,
+    editable: !readOnly,
     extensions: [
       StarterKit.configure({
         link: {
@@ -305,6 +310,7 @@ function createEditor(body: string) {
         transformCopiedText: false,
       }),
       NotionKeys.configure({ onLink: () => bubble?.openLink() }),
+      DiffHighlight,
       SlashCommand.configure({
         onPick: (e, block) => {
           if (block.id === 'image') requestImage('pick');
@@ -343,6 +349,7 @@ function createEditor(body: string) {
       },
     },
     onUpdate: ({ transaction }) => {
+      diff?.schedule();
       if (transaction.getMeta('mm-external')) return;
       scheduleSend();
     },
@@ -384,6 +391,7 @@ function loadExternal(text: string) {
   }
   lastText = text;
   userEdited = false;
+  diff?.schedule();
 }
 
 // Don't let VS Code also act on keys the editor already handled (⌘B would toggle the
@@ -412,6 +420,8 @@ window.addEventListener('message', (event) => {
     case 'init': {
       applySettings(msg.settings);
       setBaseUri(msg.baseUri);
+      readOnly = !!msg.readOnly;
+      document.body.classList.toggle('readonly', readOnly);
       analyse(msg.text);
       const { fm, body } = splitFrontmatter(msg.text);
       frontmatter = fm;
@@ -424,9 +434,10 @@ window.addEventListener('message', (event) => {
       editor = createEditor(body);
       bubble = new BubbleMenu(editor);
       setupPlusButton(editor);
+      diff = new DiffController(editor, splitFrontmatter, () => frontmatter, (m) => vscode.postMessage(m));
       document.body.classList.add('ready');
       // Focus at the end of a brand-new empty doc so you can just start typing
-      if (!body.trim()) editor.commands.focus('end');
+      if (!body.trim() && !readOnly) editor.commands.focus('end');
       break;
     }
     case 'external':
@@ -448,6 +459,18 @@ window.addEventListener('message', (event) => {
       break;
     case 'settings':
       applySettings(msg.settings);
+      break;
+    case 'diff':
+      diff?.enable(msg.role, msg.otherText, msg.label, msg.readOnly);
+      break;
+    case 'diffOther':
+      diff?.setOther(msg.text);
+      break;
+    case 'diffEnd':
+      diff?.disable();
+      break;
+    case 'syncScroll':
+      diff?.syncScroll(msg.anchor, msg.frac, msg.atTop);
       break;
   }
 });

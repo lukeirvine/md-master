@@ -10,6 +10,22 @@ A Notion-style editor for Markdown files in VS Code. You never see markdown synt
 - Hover a block for the `+` (add block below) and `⋮⋮` (drag to move) handles.
 - Need the raw file? Click the `<>` icon in the editor title bar, or right-click the file → **Open as Raw Markdown**.
 
+## Diffs
+
+Opening a changed `.md` file from Source Control (or Timeline, or "Compare with…") shows a
+side-by-side rich diff: removed content in red on the left, added content in green on the right,
+using your theme's diff colours. Scrolling is synced, ↑/↓ in the top bar jump between changes.
+The historical side is read-only; if both sides are real files, both stay editable.
+
+This uses VS Code's proposed `customEditorDiffs` API, enabled via `~/.vscode/argv.json`:
+
+```json
+"enable-proposed-api": ["local.md-master"]
+```
+
+(Requires a full VS Code restart.) Without it, git diffs still get highlighted via a fallback,
+but "Compare with…" between two files won't.
+
 ## Shortcuts
 
 | Action | Keys |

@@ -10,7 +10,22 @@ type FromWebview =
   | { type: 'openLink'; href: string }
   | { type: 'pickImage'; id: number }
   | { type: 'pasteImage'; id: number; data: string; ext: string }
-  | { type: 'openRaw' };
+  | { type: 'openRaw' }
+  | { type: 'scroll'; anchor: number; frac: number; atTop: boolean };
+
+type DiffRole = 'original' | 'modified';
+
+/** One webview showing one document. Two sessions get paired when shown as a diff. */
+interface Session {
+  document: vscode.TextDocument;
+  panel: vscode.WebviewPanel;
+  post: (msg: unknown) => void;
+  ready: boolean;
+  readOnly: boolean;
+  createdAt: number;
+  partner?: Session;
+  role?: DiffRole;
+}
 
 function getNonce() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -25,6 +40,36 @@ function toPosixRelative(fromDir: vscode.Uri, file: vscode.Uri): string {
   return rel.split('/').map((seg) => encodeURIComponent(seg).replace(/%40/g, '@')).join('/');
 }
 
+function isWritable(doc: vscode.TextDocument): boolean {
+  if (doc.isUntitled) return true;
+  return vscode.workspace.fs.isWritableFileSystem(doc.uri.scheme) === true;
+}
+
+/** `git:` URIs carry the real path and ref as JSON in the query. */
+function gitInfo(uri: vscode.Uri): { path: string; ref: string } | null {
+  if (uri.scheme !== 'git') return null;
+  try {
+    const q = JSON.parse(uri.query);
+    return { path: q.path ?? uri.fsPath, ref: q.ref ?? '' };
+  } catch {
+    return { path: uri.fsPath, ref: '' };
+  }
+}
+
+function labelFor(doc: vscode.TextDocument, partner: vscode.TextDocument): string {
+  const name = path.basename(doc.uri.path);
+  const git = gitInfo(doc.uri);
+  if (git) {
+    const ref = git.ref;
+    if (ref === '~' || ref === '') return `${name} · Before`;
+    if (ref === 'HEAD') return `${name} · HEAD`;
+    return `${name} · ${/^[0-9a-f]{12,}$/i.test(ref) ? ref.slice(0, 7) : ref}`;
+  }
+  if (doc.uri.scheme === 'file' && gitInfo(partner.uri)) return `${name} · Working tree`;
+  if (doc.uri.scheme === 'file') return name;
+  return `${name} · ${doc.uri.scheme}`;
+}
+
 export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
   static register(context: vscode.ExtensionContext): vscode.Disposable {
     return vscode.window.registerCustomEditorProvider(VIEW_TYPE, new MarkdownEditorProvider(context), {
@@ -33,25 +78,113 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     });
   }
 
-  constructor(private readonly context: vscode.ExtensionContext) {}
+  private sessions = new Set<Session>();
 
-  async resolveCustomTextEditor(
-    document: vscode.TextDocument,
-    panel: vscode.WebviewPanel,
+  constructor(private readonly context: vscode.ExtensionContext) {
+    // Keep the "other side" of every diff up to date as either document changes.
+    context.subscriptions.push(
+      vscode.workspace.onDidChangeTextDocument((e) => {
+        if (e.contentChanges.length === 0) return;
+        for (const s of this.sessions) {
+          if (s.partner && s.partner.document === e.document && s.ready) {
+            s.post({ type: 'diffOther', text: e.document.getText() });
+          }
+        }
+      }),
+    );
+  }
+
+  // ------------------------------------------------------------------ entry points
+
+  async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
+    const session = this.setup(document, panel);
+    this.tryHeuristicPair(session);
+  }
+
+  /**
+   * Proposed API (`customEditorDiffs`): VS Code hands us both halves of a diff at once.
+   * Only called when the proposal is enabled for this extension; otherwise VS Code opens
+   * two plain editors and we fall back to `tryHeuristicPair`.
+   */
+  async resolveCustomTextEditorSideBySideDiff(
+    documents: { original: vscode.TextDocument; modified: vscode.TextDocument },
+    panels: { original: vscode.WebviewPanel; modified: vscode.WebviewPanel },
   ): Promise<void> {
+    const original = this.setup(documents.original, panels.original);
+    const modified = this.setup(documents.modified, panels.modified);
+    this.pair(original, modified);
+  }
+
+  // ------------------------------------------------------------------ diff pairing
+
+  private pair(original: Session, modified: Session) {
+    original.partner = modified;
+    modified.partner = original;
+    original.role = 'original';
+    modified.role = 'modified';
+    this.sendDiff(original);
+    this.sendDiff(modified);
+  }
+
+  private sendDiff(s: Session) {
+    if (!s.ready || !s.partner || !s.role) return;
+    s.post({
+      type: 'diff',
+      role: s.role,
+      otherText: s.partner.document.getText(),
+      label: labelFor(s.document, s.partner.document),
+      readOnly: s.readOnly,
+    });
+  }
+
+  /**
+   * Without the proposed API, a git diff shows up as two unrelated editors opened at the
+   * same moment in the same group: a read-only `git:` one and the real file. Pair those.
+   */
+  private tryHeuristicPair(s: Session) {
+    const attempt = () => {
+      if (s.partner || !this.sessions.has(s)) return true;
+      const mine = gitInfo(s.document.uri);
+      for (const o of this.sessions) {
+        if (o === s || o.partner || Math.abs(o.createdAt - s.createdAt) > 3000) continue;
+        if (o.panel.viewColumn !== s.panel.viewColumn) continue;
+        const theirs = gitInfo(o.document.uri);
+        if (mine && !theirs && o.document.uri.scheme === 'file' && o.document.uri.fsPath === mine.path) {
+          this.pair(s, o);
+          return true;
+        }
+        if (theirs && !mine && s.document.uri.scheme === 'file' && s.document.uri.fsPath === theirs.path) {
+          this.pair(o, s);
+          return true;
+        }
+      }
+      return false;
+    };
+    if (!attempt()) setTimeout(attempt, 400);
+  }
+
+  // ------------------------------------------------------------------ session
+
+  private setup(document: vscode.TextDocument, panel: vscode.WebviewPanel): Session {
     const webview = panel.webview;
     const docDir = vscode.Uri.joinPath(document.uri, '..');
     const distDir = vscode.Uri.joinPath(this.context.extensionUri, 'dist');
+    const roots = [distDir, ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri)];
+    if (docDir.scheme === 'file') roots.push(docDir);
 
-    webview.options = {
-      enableScripts: true,
-      localResourceRoots: [
-        distDir,
-        docDir,
-        ...(vscode.workspace.workspaceFolders ?? []).map((f) => f.uri),
-      ],
-    };
+    webview.options = { enableScripts: true, localResourceRoots: roots };
     webview.html = this.getHtml(webview, distDir);
+
+    const session: Session = {
+      document,
+      panel,
+      post: (msg) => void webview.postMessage(msg),
+      ready: false,
+      readOnly: !isWritable(document),
+      createdAt: Date.now(),
+    };
+    this.sessions.add(session);
+    const post = session.post;
 
     const disposables: vscode.Disposable[] = [];
     // Texts we wrote to the document ourselves. When the change event for one
@@ -59,11 +192,8 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     // what makes other editors jump the cursor / eat keystrokes).
     let pending: string[] = [];
     let editQueue: Promise<unknown> = Promise.resolve();
-    let ready = false;
     let flushId = 0;
     const flushWaiters = new Map<number, (text: string | null) => void>();
-
-    const post = (msg: unknown) => webview.postMessage(msg);
 
     const settings = () => {
       const cfg = vscode.workspace.getConfiguration('mdMaster');
@@ -74,10 +204,17 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       };
     };
 
-    const fullRange = () =>
-      new vscode.Range(0, 0, document.lineCount, 0);
+    const fullRange = () => new vscode.Range(0, 0, document.lineCount, 0);
+
+    // Images in a git revision still live next to the real file.
+    const imageBase = () => {
+      const git = gitInfo(document.uri);
+      const dir = git ? vscode.Uri.joinPath(vscode.Uri.file(git.path), '..') : docDir;
+      return webview.asWebviewUri(dir).toString();
+    };
 
     const applyText = (text: string) => {
+      if (session.readOnly) return editQueue;
       editQueue = editQueue.then(async () => {
         if (text === document.getText()) return;
         pending.push(text);
@@ -108,29 +245,28 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       webview.onDidReceiveMessage(async (msg: FromWebview) => {
         switch (msg.type) {
           case 'ready': {
-            ready = true;
+            session.ready = true;
             post({
               type: 'init',
               text: document.getText(),
-              baseUri: webview.asWebviewUri(docDir).toString(),
+              baseUri: imageBase(),
               settings: settings(),
               fileName: path.basename(document.uri.path),
+              readOnly: session.readOnly,
             });
+            this.sendDiff(session);
             break;
           }
-          case 'edit': {
+          case 'edit':
             void applyText(msg.text);
             break;
-          }
-          case 'flushed': {
+          case 'flushed':
             flushWaiters.get(msg.id)?.(msg.text);
             flushWaiters.delete(msg.id);
             break;
-          }
-          case 'openLink': {
+          case 'openLink':
             await this.openLink(msg.href, docDir);
             break;
-          }
           case 'pickImage': {
             const src = await this.pickImage(docDir);
             post({ type: 'imagePicked', id: msg.id, src });
@@ -141,10 +277,12 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
             post({ type: 'imagePicked', id: msg.id, src });
             break;
           }
-          case 'openRaw': {
+          case 'openRaw':
             await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
             break;
-          }
+          case 'scroll':
+            if (session.partner?.ready) session.partner.post({ ...msg, type: 'syncScroll' });
+            break;
         }
       }),
 
@@ -159,11 +297,11 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         }
         // Change came from somewhere else (git, raw text editor, undo via menu...)
         pending = [];
-        if (ready) post({ type: 'external', text });
+        if (session.ready) post({ type: 'external', text });
       }),
 
       vscode.workspace.onWillSaveTextDocument((e) => {
-        if (e.document.uri.toString() !== document.uri.toString() || !ready) return;
+        if (e.document.uri.toString() !== document.uri.toString() || !session.ready || session.readOnly) return;
         // Make sure the very latest keystrokes are in the document before it is written.
         e.waitUntil(
           (async () => {
@@ -181,8 +319,21 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       }),
     );
 
-    panel.onDidDispose(() => disposables.forEach((d) => d.dispose()));
+    panel.onDidDispose(() => {
+      disposables.forEach((d) => d.dispose());
+      this.sessions.delete(session);
+      const partner = session.partner;
+      if (partner) {
+        partner.partner = undefined;
+        partner.role = undefined;
+        if (partner.ready) partner.post({ type: 'diffEnd' });
+      }
+    });
+
+    return session;
   }
+
+  // ------------------------------------------------------------------ host helpers
 
   private async openLink(href: string, docDir: vscode.Uri) {
     if (!href) return;
@@ -199,9 +350,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       if (!p) return; // pure anchor, handled in the webview
       const decoded = decodeURIComponent(p);
       const root = vscode.workspace.getWorkspaceFolder(docDir)?.uri ?? docDir;
-      target = decoded.startsWith('/')
-        ? vscode.Uri.joinPath(root, decoded)
-        : vscode.Uri.joinPath(docDir, decoded);
+      target = decoded.startsWith('/') ? vscode.Uri.joinPath(root, decoded) : vscode.Uri.joinPath(docDir, decoded);
     }
     try {
       await vscode.workspace.fs.stat(target);
@@ -274,6 +423,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
   <link rel="stylesheet" href="${style}">
 </head>
 <body>
+  <div id="diffbar" hidden></div>
   <main id="page">
     <div id="frontmatter"></div>
     <div id="editor"></div>

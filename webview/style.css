@@ -765,3 +765,196 @@ body.mod-down .ProseMirror a {
     display: none;
   }
 }
+
+/* ============================================================ read-only */
+
+body.readonly .block-plus,
+body.readonly .drag-handle {
+  display: none;
+}
+body.readonly #page {
+  cursor: default;
+}
+
+/* ============================================================ diff */
+
+:root {
+  --mm-ins-line: var(--vscode-diffEditor-insertedLineBackground, rgba(155, 185, 85, 0.2));
+  --mm-ins-word: var(--vscode-diffEditor-insertedTextBackground, rgba(156, 204, 44, 0.4));
+  --mm-del-line: var(--vscode-diffEditor-removedLineBackground, rgba(255, 0, 0, 0.12));
+  --mm-del-word: var(--vscode-diffEditor-removedTextBackground, rgba(255, 0, 0, 0.3));
+  --mm-ins-accent: var(--vscode-gitDecoration-addedResourceForeground, #2ea043);
+  --mm-del-accent: var(--vscode-gitDecoration-deletedResourceForeground, #f85149);
+}
+
+#diffbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 34px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px 0 16px;
+  background: var(--mm-bg);
+  border-bottom: 1px solid var(--mm-border);
+  font-family: var(--mm-font);
+  font-size: 12px;
+  color: var(--mm-muted);
+  user-select: none;
+}
+#diffbar[hidden] {
+  display: none;
+}
+.db-left,
+.db-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.db-label {
+  color: var(--mm-fg);
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.db-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.db-dot.del {
+  background: var(--mm-del-accent);
+}
+.db-dot.ins {
+  background: var(--mm-ins-accent);
+}
+.db-badge {
+  border: 1px solid var(--mm-border);
+  border-radius: 10px;
+  padding: 1px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.db-count {
+  white-space: nowrap;
+  margin-right: 2px;
+}
+.db-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--mm-fg);
+}
+.db-btn:hover {
+  background: var(--mm-hover);
+}
+body.diff-mode #page {
+  padding-top: 72px;
+}
+
+/* whole blocks that only exist on one side */
+.ProseMirror .mm-diff-block-ins,
+.ProseMirror .mm-diff-line-ins {
+  background: var(--mm-ins-line);
+  box-shadow: -10px 0 0 var(--mm-ins-line), 10px 0 0 var(--mm-ins-line), inset 0 0 0 0 transparent;
+  border-radius: 1px;
+}
+.ProseMirror .mm-diff-block-del,
+.ProseMirror .mm-diff-line-del {
+  background: var(--mm-del-line);
+  box-shadow: -10px 0 0 var(--mm-del-line), 10px 0 0 var(--mm-del-line);
+  border-radius: 1px;
+}
+/* stronger tint for blocks that are entirely new / gone */
+.ProseMirror .mm-diff-block-ins {
+  background: var(--mm-ins-word);
+  box-shadow: -10px 0 0 var(--mm-ins-word), 10px 0 0 var(--mm-ins-word), -13px 0 0 var(--mm-ins-accent);
+}
+.ProseMirror .mm-diff-block-del {
+  background: var(--mm-del-word);
+  box-shadow: -10px 0 0 var(--mm-del-word), 10px 0 0 var(--mm-del-word), -13px 0 0 var(--mm-del-accent);
+}
+.ProseMirror .mm-diff-line-ins {
+  box-shadow: -10px 0 0 var(--mm-ins-line), 10px 0 0 var(--mm-ins-line), -13px 0 0 var(--mm-ins-accent);
+}
+.ProseMirror .mm-diff-line-del {
+  box-shadow: -10px 0 0 var(--mm-del-line), 10px 0 0 var(--mm-del-line), -13px 0 0 var(--mm-del-accent);
+}
+.ProseMirror pre.mm-diff-line-ins,
+.ProseMirror pre.mm-diff-block-ins,
+.ProseMirror pre.mm-diff-line-del,
+.ProseMirror pre.mm-diff-block-del {
+  box-shadow: none;
+}
+.ProseMirror hr.mm-diff-block-ins {
+  border-top-color: var(--mm-ins-accent);
+  box-shadow: none;
+}
+.ProseMirror hr.mm-diff-block-del {
+  border-top-color: var(--mm-del-accent);
+  box-shadow: none;
+}
+.ProseMirror img.mm-diff-block-ins {
+  outline: 3px solid var(--mm-ins-accent);
+}
+.ProseMirror img.mm-diff-block-del {
+  outline: 3px solid var(--mm-del-accent);
+}
+
+/* changed words inside a changed block */
+.ProseMirror .mm-diff-word-ins {
+  background: var(--mm-ins-word);
+  border-radius: 2px;
+}
+.ProseMirror .mm-diff-word-del {
+  background: var(--mm-del-word);
+  border-radius: 2px;
+}
+
+/* "something was added/removed here" placeholders, like the hatched filler in the native diff */
+.mm-diff-gap {
+  height: 8px;
+  margin: 3px -10px;
+  border-radius: 2px;
+  pointer-events: none;
+}
+.mm-diff-gap-del {
+  background: repeating-linear-gradient(-45deg, var(--mm-del-word) 0 2px, transparent 2px 6px);
+}
+.mm-diff-gap-ins {
+  background: repeating-linear-gradient(-45deg, var(--mm-ins-word) 0 2px, transparent 2px 6px);
+}
+
+#frontmatter.fm-diff summary .fm-title::after {
+  content: " · changed";
+  color: var(--mm-muted);
+  font-weight: 400;
+}
+body.diff-original #frontmatter.fm-diff summary {
+  background: var(--mm-del-line);
+}
+body.diff-modified #frontmatter.fm-diff summary {
+  background: var(--mm-ins-line);
+}
+/* inside lists/tables the left accent bar would collide with bullets & checkboxes */
+.ProseMirror li .mm-diff-line-ins,
+.ProseMirror li .mm-diff-line-del,
+.ProseMirror li .mm-diff-block-ins,
+.ProseMirror li .mm-diff-block-del,
+.ProseMirror td > *,
+.ProseMirror th > * {
+  box-shadow: none !important;
+}
