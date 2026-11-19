@@ -18,6 +18,9 @@
   --mm-code-fg: #eb5757;
   --mm-block-bg: rgb(247, 246, 243);
   --mm-accent: #2383e2;
+  --mm-bold: var(--vscode-gitDecoration-modifiedResourceForeground, #895503);
+  --mm-link: var(--vscode-textLink-foreground, #006ab1);
+  --mm-link-hover: var(--vscode-textLink-activeForeground, #006ab1);
   --mm-selection: rgba(35, 131, 226, 0.28);
   --mm-pop-bg: #ffffff;
   --mm-pop-shadow: rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 3px 6px, rgba(15, 15, 15, 0.2) 0 9px 24px;
@@ -35,6 +38,9 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) {
   --mm-code-fg: #ff7369;
   --mm-block-bg: rgba(255, 255, 255, 0.04);
   --mm-accent: #2e8ef0;
+  --mm-bold: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d);
+  --mm-link: var(--vscode-textLink-foreground, #3794ff);
+  --mm-link-hover: var(--vscode-textLink-activeForeground, #3794ff);
   --mm-selection: rgba(35, 131, 226, 0.4);
   --mm-pop-bg: #252525;
   --mm-pop-shadow: rgba(0, 0, 0, 0.3) 0 0 0 1px, rgba(0, 0, 0, 0.3) 0 3px 6px, rgba(0, 0, 0, 0.45) 0 9px 24px;
@@ -140,24 +146,31 @@ body.ready {
   margin-top: 0;
 }
 
+/* Deviation from Notion: bold uses the theme's "git modified" Explorer color */
 .ProseMirror strong {
   font-weight: 600;
+  color: var(--mm-bold);
 }
 
+/* Deviation from Notion: links use the same blue as VS Code's Markdown preview */
 .ProseMirror a {
-  color: inherit;
+  color: var(--mm-link);
   text-decoration: underline;
-  text-decoration-color: var(--mm-faint);
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
   text-underline-offset: 2px;
   text-decoration-thickness: 1px;
   cursor: text;
 }
 .ProseMirror a:hover {
-  text-decoration-color: var(--mm-fg);
+  color: var(--mm-link-hover);
+  text-decoration-color: currentColor;
+}
+/* bold text inside a link stays link-colored */
+.ProseMirror a strong {
+  color: inherit;
 }
 body.mod-down .ProseMirror a {
   cursor: pointer;
-  color: var(--mm-accent);
 }
 
 .ProseMirror code {
