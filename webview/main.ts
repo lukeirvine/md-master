@@ -222,6 +222,34 @@ function setupPlusButton(ed: Editor) {
     mo.observe(host, { childList: true });
   }
 
+  // The drag-handle plugin hides the handles on any `mouseout` whose target isn't the editor
+  // root or a `.drag-handle` itself. That fires when the cursor crosses the small gap between
+  // the text and the handles, and when it moves onto the "+" icon's inner <svg>, so the
+  // handles vanish before they can be clicked. Intercept those events (capture phase, so the
+  // plugin's bubble listener never sees them) and hide after a short grace period instead.
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelHide = () => {
+    clearTimeout(hideTimer);
+    hideTimer = undefined;
+  };
+  host.addEventListener('mouseover', cancelHide, true);
+  host.addEventListener(
+    'mouseout',
+    (e) => {
+      const to = e.relatedTarget instanceof Element ? e.relatedTarget : null;
+      if (to?.closest('.drag-handle')) {
+        e.stopPropagation();
+      } else if (!to || !host.contains(to)) {
+        e.stopPropagation();
+        cancelHide();
+        hideTimer = setTimeout(() => {
+          host.querySelector('.drag-handle:not(.block-plus)')?.classList.add('hide');
+        }, 400);
+      }
+    },
+    true,
+  );
+
   plus.addEventListener('mousedown', (e) => e.preventDefault());
   plus.addEventListener('click', () => {
     const r = plus.getBoundingClientRect();
@@ -229,13 +257,31 @@ function setupPlusButton(ed: Editor) {
     const domRect = view.dom.getBoundingClientRect();
     const hit = view.posAtCoords({ left: domRect.left + 60, top: r.top + r.height / 2 });
     if (!hit) return;
-    const $pos = view.state.doc.resolve(hit.inside >= 0 ? hit.inside : hit.pos);
-    const top = $pos.depth >= 1 ? $pos.node(1) : null;
-    let tr = view.state.tr;
-    if (top && top.type.name === 'paragraph' && top.content.size === 0) {
-      tr = tr.setSelection(TextSelection.create(tr.doc, $pos.before(1) + 1));
+    // Find the top-level block under the "+". `hit.inside` is the position *before* the node
+    // it falls in, which for a top-level block resolves at depth 0 (between blocks) — so it
+    // has to be treated as "the block starting here", not as a position inside one.
+    const doc = view.state.doc;
+    const p = hit.inside >= 0 ? hit.inside : hit.pos;
+    const $p = doc.resolve(p);
+    let blockStart: number;
+    let block;
+    if ($p.depth >= 1) {
+      blockStart = $p.before(1);
+      block = $p.node(1);
+    } else if (doc.nodeAt(p)) {
+      blockStart = p;
+      block = doc.nodeAt(p)!;
+    } else if ($p.nodeBefore) {
+      block = $p.nodeBefore;
+      blockStart = p - block.nodeSize;
     } else {
-      const after = $pos.depth >= 1 ? $pos.after(1) : $pos.pos;
+      return;
+    }
+    let tr = view.state.tr;
+    if (block.type.name === 'paragraph' && block.content.size === 0) {
+      tr = tr.setSelection(TextSelection.create(tr.doc, blockStart + 1));
+    } else {
+      const after = blockStart + block.nodeSize;
       tr = tr.insert(after, view.state.schema.nodes.paragraph.create());
       tr = tr.setSelection(TextSelection.create(tr.doc, after + 1));
     }
