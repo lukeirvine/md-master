@@ -11,9 +11,15 @@ type FromWebview =
   | { type: 'pickImage'; id: number }
   | { type: 'pasteImage'; id: number; data: string; ext: string }
   | { type: 'openRaw' }
+  | { type: 'cursorAt'; id: number; selection: { anchor: SourcePos; head: SourcePos } | null }
   | { type: 'scroll'; anchor: number; frac: number; atTop: boolean };
 
 type DiffRole = 'original' | 'modified';
+
+interface SourcePos {
+  line: number;
+  character: number;
+}
 
 /** One webview showing one document. Two sessions get paired when shown as a diff. */
 interface Session {
@@ -25,6 +31,8 @@ interface Session {
   createdAt: number;
   partner?: Session;
   role?: DiffRole;
+  /** Where the cursor is in the file's text, once any pending edits have been applied. */
+  requestSelection?: () => Promise<vscode.Selection | undefined>;
 }
 
 function getNonce() {
@@ -71,14 +79,28 @@ function labelFor(doc: vscode.TextDocument, partner: vscode.TextDocument): strin
 }
 
 export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
-  static register(context: vscode.ExtensionContext): vscode.Disposable {
-    return vscode.window.registerCustomEditorProvider(VIEW_TYPE, new MarkdownEditorProvider(context), {
-      webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true },
-      supportsMultipleEditorsPerDocument: true,
-    });
+  static register(context: vscode.ExtensionContext): MarkdownEditorProvider {
+    const provider = new MarkdownEditorProvider(context);
+    context.subscriptions.push(
+      vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
+        webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true },
+        supportsMultipleEditorsPerDocument: true,
+      }),
+    );
+    return provider;
   }
 
   private sessions = new Set<Session>();
+
+  /** The cursor of the MD Master editor for `uri`, if that editor is the active tab. */
+  async activeSelection(uri: vscode.Uri): Promise<vscode.Selection | undefined> {
+    for (const s of this.sessions) {
+      if (s.panel.active && s.ready && s.document.uri.toString() === uri.toString()) {
+        return s.requestSelection?.();
+      }
+    }
+    return undefined;
+  }
 
   constructor(private readonly context: vscode.ExtensionContext) {
     // Keep the "other side" of every diff up to date as either document changes.
@@ -241,6 +263,27 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         post({ type: 'flush', id });
       });
 
+    let cursorId = 0;
+    const cursorWaiters = new Map<number, (sel: vscode.Selection | undefined) => void>();
+    session.requestSelection = () =>
+      new Promise<vscode.Selection | undefined>((resolve) => {
+        const id = ++cursorId;
+        const timer = setTimeout(() => {
+          cursorWaiters.delete(id);
+          resolve(undefined);
+        }, 1000);
+        cursorWaiters.set(id, (sel) => {
+          clearTimeout(timer);
+          resolve(sel);
+        });
+        post({ type: 'cursor', id });
+        // The webview flushes pending edits (an 'edit' message) before answering, so wait
+        // for those to land in the document before the position is used.
+      }).then(async (sel) => {
+        await editQueue;
+        return sel;
+      });
+
     disposables.push(
       webview.onDidReceiveMessage(async (msg: FromWebview) => {
         switch (msg.type) {
@@ -260,6 +303,14 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           case 'edit':
             void applyText(msg.text);
             break;
+          case 'cursorAt': {
+            const sel = msg.selection;
+            cursorWaiters.get(msg.id)?.(
+              sel ? new vscode.Selection(sel.anchor.line, sel.anchor.character, sel.head.line, sel.head.character) : undefined,
+            );
+            cursorWaiters.delete(msg.id);
+            break;
+          }
           case 'flushed':
             flushWaiters.get(msg.id)?.(msg.text);
             flushWaiters.delete(msg.id);

@@ -13,6 +13,7 @@ import { MdImage, RawHtmlBlock, RawHtmlInline, NotionKeys, TightTaskLists, setBa
 import { ICONS } from './blocks';
 import { MdText } from './escaping';
 import { DiffHighlight, DiffController } from './diff';
+import { diffChars } from 'diff';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -86,6 +87,75 @@ function scheduleSend() {
   userEdited = true;
   if (sendTimer) clearTimeout(sendTimer);
   sendTimer = setTimeout(sendNow, 80);
+}
+
+// ---------------------------------------------------------------- cursor -> file position
+
+interface SourcePos {
+  line: number;
+  character: number;
+}
+
+function commonPrefixLength(a: string, b: string): number {
+  const n = Math.min(a.length, b.length);
+  let i = 0;
+  while (i < n && a.charCodeAt(i) === b.charCodeAt(i)) i++;
+  return i;
+}
+
+/** Map an offset in `from` to the matching offset in `to` (two versions of similar text). */
+function mapOffset(from: string, to: string, offset: number): number {
+  if (from === to) return offset;
+  const changes = diffChars(from, to, { timeout: 300 });
+  if (!changes) return Math.min(offset, to.length);
+  let a = 0;
+  let b = 0;
+  for (const c of changes) {
+    const len = c.value.length;
+    if (c.added) {
+      b += len;
+      continue;
+    }
+    if (offset <= a + len) return c.removed ? b : b + (offset - a);
+    a += len;
+    if (!c.removed) b += len;
+  }
+  return b;
+}
+
+/**
+ * Where the selection's anchor/head sit in the file's text, as line/character.
+ *
+ * Serializing the document cut off at the cursor gives the markdown *before* the cursor
+ * (plus whatever closing markup the cut adds, e.g. a trailing `**`); its common prefix with
+ * the full serialization is the cursor's offset in the markdown. That offset is then mapped
+ * onto the file's real text, which can differ from our serialization when the file hasn't
+ * been edited here (different list markers, spacing…).
+ */
+function sourceSelection(): { anchor: SourcePos; head: SourcePos } | null {
+  if (!editor) return null;
+  sendNow(); // push pending edits first so the file matches what's on screen
+  const nl = (t: string) => t.replace(/\r\n/g, '\n');
+  const serializer = (editor.storage as any).markdown.serializer;
+  const { doc, selection } = editor.state;
+  const full: string = serializer.serialize(doc);
+  const bodyLength = full.replace(/\s+$/, '').length;
+  const fmLength = nl(frontmatter).length;
+  const ours = nl(serialize());
+  const actual = nl(lastText);
+
+  const toSource = (pmPos: number): SourcePos => {
+    const before: string = serializer.serialize(doc.cut(0, pmPos));
+    const inBody = Math.min(commonPrefixLength(before, full), bodyLength);
+    const offset = mapOffset(ours, actual, fmLength + inBody);
+    const lineStart = offset > 0 ? actual.lastIndexOf('\n', offset - 1) + 1 : 0;
+    let line = 0;
+    for (let i = 0; i < lineStart; i++) if (actual.charCodeAt(i) === 10) line++;
+    return { line, character: offset - lineStart };
+  };
+  const head = toSource(selection.head);
+  const anchor = selection.anchor === selection.head ? head : toSource(selection.anchor);
+  return { anchor, head };
 }
 
 // ---------------------------------------------------------------- frontmatter UI
@@ -500,6 +570,9 @@ window.addEventListener('message', (event) => {
       vscode.postMessage({ type: 'flushed', id: msg.id, text });
       break;
     }
+    case 'cursor':
+      vscode.postMessage({ type: 'cursorAt', id: msg.id, selection: sourceSelection() });
+      break;
     case 'imagePicked':
       insertImage(msg.id, msg.src);
       break;

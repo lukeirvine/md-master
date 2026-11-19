@@ -11,13 +11,24 @@ function resolveTargetUri(uri?: vscode.Uri): vscode.Uri | undefined {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-  context.subscriptions.push(
-    MarkdownEditorProvider.register(context),
+  const provider = MarkdownEditorProvider.register(context);
 
+  context.subscriptions.push(
     vscode.commands.registerCommand('mdMaster.openRaw', async (uri?: vscode.Uri) => {
       const target = resolveTargetUri(uri);
       if (!target) return;
+      // Carry the cursor over when switching from an active MD Master tab.
+      const selection = await provider.activeSelection(target);
       await vscode.commands.executeCommand('vscode.openWith', target, 'default');
+      const ed = vscode.window.activeTextEditor;
+      if (selection && ed && ed.document.uri.toString() === target.toString()) {
+        const sel = new vscode.Selection(
+          ed.document.validatePosition(selection.anchor),
+          ed.document.validatePosition(selection.active),
+        );
+        ed.selection = sel;
+        ed.revealRange(sel, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+      }
     }),
 
     vscode.commands.registerCommand('mdMaster.openEditor', async (uri?: vscode.Uri) => {

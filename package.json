@@ -47,6 +47,14 @@
         "icon": "$(edit)"
       }
     ],
+    "keybindings": [
+      {
+        "command": "mdMaster.openRaw",
+        "key": "ctrl+alt+e",
+        "mac": "ctrl+cmd+e",
+        "when": "activeCustomEditorId == mdMaster.editor"
+      }
+    ],
     "menus": {
       "editor/title": [
         {
