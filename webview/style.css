@@ -105,6 +105,11 @@ body.ready {
   padding: 3px 2px;
   min-height: 1.5em;
 }
+/* Deviation from Notion: match the Markdown preview's 1em gap between paragraphs
+   (the two 3px paddings count toward it) */
+.ProseMirror p + p {
+  margin-top: calc(1em - 6px);
+}
 
 .ProseMirror h1,
 .ProseMirror h2,
