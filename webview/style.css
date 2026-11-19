@@ -976,3 +976,131 @@ body.diff-modified #frontmatter.fm-diff summary {
 .ProseMirror th > * {
   box-shadow: none !important;
 }
+
+/* ============================================================ outline */
+
+:root {
+  --mm-outline-width: 248px;
+}
+
+#outline {
+  position: fixed;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 55;
+  width: var(--mm-outline-width);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  /* the block tint over the page background, so it stays opaque when overlaying */
+  background: linear-gradient(var(--mm-block-bg), var(--mm-block-bg)), var(--mm-bg);
+  border-right: 1px solid var(--mm-border);
+  font-family: var(--mm-font);
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--mm-muted);
+  user-select: none;
+  cursor: default;
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition: transform 160ms ease-out, visibility 0s linear 160ms;
+}
+body.outline-open #outline {
+  transform: none;
+  visibility: visible;
+  transition: transform 160ms ease-out;
+}
+body.outline-open {
+  padding-left: var(--mm-outline-width);
+}
+body.diff-mode #outline {
+  top: 34px;
+}
+
+.ol-header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 10px 6px 18px;
+}
+.ol-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mm-muted);
+}
+.ol-close {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--mm-faint);
+  transition: background 60ms ease-in, color 60ms ease-in;
+}
+.ol-close:hover {
+  background: var(--mm-hover);
+  color: var(--mm-fg);
+}
+
+.ol-list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 2px 8px 24px;
+}
+.ol-item {
+  position: relative;
+  margin: 1px 0;
+  padding: 4px 10px 4px calc(10px + var(--depth, 0) * 14px);
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 60ms ease-in, color 60ms ease-in;
+}
+.ol-item.ol-top {
+  color: var(--mm-fg);
+}
+.ol-item:hover {
+  background: var(--mm-hover);
+  color: var(--mm-fg);
+}
+.ol-item.active {
+  color: var(--mm-accent);
+  font-weight: 500;
+}
+.ol-item.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--mm-accent);
+}
+.ol-untitled {
+  font-style: italic;
+  color: var(--mm-faint);
+}
+.ol-empty {
+  padding: 4px 10px;
+  color: var(--mm-faint);
+  white-space: normal;
+}
+
+/* not enough room beside the page: float over it instead of pushing it aside */
+@media (max-width: 760px) {
+  body.outline-open {
+    padding-left: 0;
+  }
+  body.outline-open #outline {
+    box-shadow: var(--mm-pop-shadow);
+    border-right: none;
+  }
+}

@@ -13,6 +13,7 @@ import { MdImage, RawHtmlBlock, RawHtmlInline, NotionKeys, TightTaskLists, setBa
 import { ICONS } from './blocks';
 import { MdText } from './escaping';
 import { DiffHighlight, DiffController } from './diff';
+import { Outline } from './outline';
 import { diffChars } from 'diff';
 
 interface VsCodeApi {
@@ -33,6 +34,7 @@ interface Settings {
 let editor: Editor | null = null;
 let bubble: BubbleMenu | null = null;
 let diff: DiffController | null = null;
+let outline: Outline | null = null;
 let readOnly = false;
 let frontmatter = '';
 let eol = '\n';
@@ -508,6 +510,7 @@ function loadExternal(text: string) {
   lastText = text;
   userEdited = false;
   diff?.schedule();
+  outline?.schedule();
 }
 
 // Don't let VS Code also act on keys the editor already handled (⌘B would toggle the
@@ -551,6 +554,8 @@ window.addEventListener('message', (event) => {
       bubble = new BubbleMenu(editor);
       setupPlusButton(editor);
       diff = new DiffController(editor, splitFrontmatter, () => frontmatter, (m) => vscode.postMessage(m));
+      outline = new Outline(editor, () => vscode.postMessage({ type: 'outlineVisible', visible: false }));
+      outline.setVisible(!!msg.outline);
       document.body.classList.add('ready');
       // Focus at the end of a brand-new empty doc so you can just start typing
       if (!body.trim() && !readOnly) editor.commands.focus('end');
@@ -578,6 +583,9 @@ window.addEventListener('message', (event) => {
       break;
     case 'settings':
       applySettings(msg.settings);
+      break;
+    case 'outline':
+      outline?.setVisible(!!msg.visible);
       break;
     case 'diff':
       diff?.enable(msg.role, msg.otherText, msg.label, msg.readOnly);

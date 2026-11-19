@@ -31,6 +31,10 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
+    vscode.commands.registerCommand('mdMaster.toggleOutline', () =>
+      provider.setOutlineVisible(!provider.outlineVisible),
+    ),
+
     vscode.commands.registerCommand('mdMaster.openEditor', async (uri?: vscode.Uri) => {
       const target = resolveTargetUri(uri);
       if (!target) return;

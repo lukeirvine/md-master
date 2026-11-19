@@ -41,6 +41,12 @@
         "icon": "$(code)"
       },
       {
+        "command": "mdMaster.toggleOutline",
+        "title": "Toggle Outline",
+        "category": "MD Master",
+        "icon": "$(list-tree)"
+      },
+      {
         "command": "mdMaster.openEditor",
         "title": "Open in MD Master",
         "category": "MD Master",
@@ -53,14 +59,25 @@
         "key": "ctrl+alt+e",
         "mac": "ctrl+cmd+e",
         "when": "activeCustomEditorId == mdMaster.editor"
+      },
+      {
+        "command": "mdMaster.toggleOutline",
+        "key": "ctrl+alt+o",
+        "mac": "ctrl+cmd+o",
+        "when": "activeCustomEditorId == mdMaster.editor"
       }
     ],
     "menus": {
       "editor/title": [
         {
+          "command": "mdMaster.toggleOutline",
+          "when": "activeCustomEditorId == mdMaster.editor",
+          "group": "navigation@1"
+        },
+        {
           "command": "mdMaster.openRaw",
           "when": "activeCustomEditorId == mdMaster.editor",
-          "group": "navigation"
+          "group": "navigation@2"
         },
         {
           "command": "mdMaster.openEditor",
@@ -73,6 +90,12 @@
           "command": "mdMaster.openRaw",
           "when": "resourceExtname == .md",
           "group": "navigation@99"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "mdMaster.toggleOutline",
+          "when": "activeCustomEditorId == mdMaster.editor"
         }
       ]
     },

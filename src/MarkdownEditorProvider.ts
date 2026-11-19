@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 
 export const VIEW_TYPE = 'mdMaster.editor';
+const OUTLINE_KEY = 'mdMaster.outlineVisible';
 
 type FromWebview =
   | { type: 'ready' }
@@ -11,6 +12,7 @@ type FromWebview =
   | { type: 'pickImage'; id: number }
   | { type: 'pasteImage'; id: number; data: string; ext: string }
   | { type: 'openRaw' }
+  | { type: 'outlineVisible'; visible: boolean }
   | { type: 'cursorAt'; id: number; selection: { anchor: SourcePos; head: SourcePos } | null }
   | { type: 'scroll'; anchor: number; frac: number; atTop: boolean };
 
@@ -91,6 +93,16 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
   }
 
   private sessions = new Set<Session>();
+
+  get outlineVisible(): boolean {
+    return this.context.globalState.get<boolean>(OUTLINE_KEY, false);
+  }
+
+  /** Shared across every MD Master editor, and remembered between sessions. */
+  async setOutlineVisible(visible: boolean) {
+    await this.context.globalState.update(OUTLINE_KEY, visible);
+    for (const s of this.sessions) if (s.ready) s.post({ type: 'outline', visible });
+  }
 
   /** The cursor of the MD Master editor for `uri`, if that editor is the active tab. */
   async activeSelection(uri: vscode.Uri): Promise<vscode.Selection | undefined> {
@@ -296,6 +308,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
               settings: settings(),
               fileName: path.basename(document.uri.path),
               readOnly: session.readOnly,
+              outline: this.outlineVisible,
             });
             this.sendDiff(session);
             break;
@@ -330,6 +343,9 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           }
           case 'openRaw':
             await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
+            break;
+          case 'outlineVisible':
+            await this.setOutlineVisible(msg.visible);
             break;
           case 'scroll':
             if (session.partner?.ready) session.partner.post({ ...msg, type: 'syncScroll' });
