@@ -85,7 +85,8 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const provider = new MarkdownEditorProvider(context);
     context.subscriptions.push(
       vscode.window.registerCustomEditorProvider(VIEW_TYPE, provider, {
-        webviewOptions: { retainContextWhenHidden: true, enableFindWidget: true },
+        // Find is our own bar (webview/find.ts): VS Code's widget can't show a match count
+        webviewOptions: { retainContextWhenHidden: true },
         supportsMultipleEditorsPerDocument: true,
       }),
     );

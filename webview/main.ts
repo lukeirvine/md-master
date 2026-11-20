@@ -14,6 +14,7 @@ import { ICONS } from './blocks';
 import { MdText } from './escaping';
 import { DiffHighlight, DiffController } from './diff';
 import { Outline } from './outline';
+import { FindHighlight, FindBar } from './find';
 import { diffChars } from 'diff';
 
 interface VsCodeApi {
@@ -429,6 +430,7 @@ function createEditor(body: string) {
       }),
       NotionKeys.configure({ onLink: () => bubble?.openLink() }),
       DiffHighlight,
+      FindHighlight,
       SlashCommand.configure({
         onPick: (e, block) => {
           if (block.id === 'image') requestImage('pick');
@@ -556,6 +558,7 @@ window.addEventListener('message', (event) => {
       diff = new DiffController(editor, splitFrontmatter, () => frontmatter, (m) => vscode.postMessage(m));
       outline = new Outline(editor, () => vscode.postMessage({ type: 'outlineVisible', visible: false }));
       outline.setVisible(!!msg.outline);
+      new FindBar(editor);
       document.body.classList.add('ready');
       // Focus at the end of a brand-new empty doc so you can just start typing
       if (!body.trim() && !readOnly) editor.commands.focus('end');

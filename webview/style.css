@@ -1132,3 +1132,114 @@ body.diff-modified.outline-open #outline {
     border-right: none;
   }
 }
+
+/* ============================================================ find */
+
+/* Mirrors VS Code's find widget, using its theme colours */
+#findbar {
+  position: fixed;
+  top: 0;
+  right: 14px;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px 4px 4px;
+  box-sizing: border-box;
+  background: var(--vscode-editorWidget-background, var(--mm-pop-bg));
+  color: var(--vscode-editorWidget-foreground, var(--mm-fg));
+  border: 1px solid var(--vscode-editorWidget-border, transparent);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  box-shadow: 0 0 8px 2px var(--vscode-widget-shadow, rgba(0, 0, 0, 0.16));
+  font-family: var(--vscode-font-family, var(--mm-font));
+  font-size: 13px;
+  user-select: none;
+}
+#findbar[hidden] {
+  display: none;
+}
+body.diff-mode #findbar {
+  top: 34px;
+}
+body.diff-modified.outline-open #findbar {
+  right: calc(var(--mm-outline-width) + 14px);
+}
+@media (max-width: 760px) {
+  body.diff-modified.outline-open #findbar {
+    right: 14px;
+  }
+}
+
+.fb-field {
+  display: flex;
+  align-items: center;
+  width: 260px;
+  height: 24px;
+  box-sizing: border-box;
+  margin-right: 4px;
+  padding: 0 6px 0 4px;
+  background: var(--vscode-input-background, var(--mm-bg));
+  color: var(--vscode-input-foreground, var(--mm-fg));
+  border: 1px solid var(--vscode-input-border, var(--mm-border));
+  border-radius: 2px;
+}
+.fb-field:focus-within {
+  border-color: var(--vscode-focusBorder, var(--mm-accent));
+}
+#findbar.fb-none .fb-field {
+  border-color: var(--vscode-inputValidation-errorBorder, #be1100);
+}
+.fb-input {
+  all: unset;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  font: inherit;
+  color: inherit;
+  user-select: text;
+}
+.fb-input::placeholder {
+  color: var(--vscode-input-placeholderForeground, var(--mm-faint));
+}
+.fb-count {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--vscode-descriptionForeground, var(--mm-muted));
+}
+#findbar.fb-none .fb-count {
+  color: var(--vscode-errorForeground, #f48771);
+}
+
+.fb-btn {
+  all: unset;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  cursor: pointer;
+  color: inherit;
+}
+.fb-btn:hover:not(:disabled) {
+  background: var(--vscode-toolbar-hoverBackground, var(--mm-hover));
+}
+.fb-btn:focus-visible {
+  outline: 1px solid var(--vscode-focusBorder, var(--mm-accent));
+}
+.fb-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.mm-find-match {
+  background: var(--vscode-editor-findMatchHighlightBackground, rgba(234, 92, 0, 0.33));
+  border-radius: 2px;
+}
+.mm-find-current {
+  background: var(--vscode-editor-findMatchBackground, rgba(255, 150, 50, 0.7));
+  outline: 1px solid var(--vscode-editor-findMatchBorder, transparent);
+}
