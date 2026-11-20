@@ -47,6 +47,12 @@
         "icon": "$(list-tree)"
       },
       {
+        "command": "mdMaster.export",
+        "title": "Export…",
+        "category": "MD Master",
+        "icon": "$(export)"
+      },
+      {
         "command": "mdMaster.openEditor",
         "title": "Open in MD Master",
         "category": "MD Master",
@@ -80,6 +86,11 @@
           "group": "navigation@2"
         },
         {
+          "command": "mdMaster.export",
+          "when": "activeCustomEditorId == mdMaster.editor",
+          "group": "navigation@3"
+        },
+        {
           "command": "mdMaster.openEditor",
           "when": "editorLangId == markdown && !activeCustomEditorId",
           "group": "navigation"
@@ -95,6 +106,10 @@
       "commandPalette": [
         {
           "command": "mdMaster.toggleOutline",
+          "when": "activeCustomEditorId == mdMaster.editor"
+        },
+        {
+          "command": "mdMaster.export",
           "when": "activeCustomEditorId == mdMaster.editor"
         }
       ]

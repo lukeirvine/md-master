@@ -69,6 +69,16 @@ export class Outline {
     this.timer = setTimeout(() => this.refresh(), 150);
   }
 
+  /** The rendered heading elements, in the same order (and indices) as the outline items. */
+  headingElements(): (Element | null)[] {
+    this.refresh();
+    const view = this.editor.view;
+    return this.headings.map((h) => {
+      const dom = view.nodeDOM(h.pos);
+      return dom && dom.nodeType === 1 ? (dom as Element) : null;
+    });
+  }
+
   private refresh() {
     this.timer = undefined;
     const headings: Heading[] = [];

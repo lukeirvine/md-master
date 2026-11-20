@@ -15,6 +15,7 @@ import { MdText } from './escaping';
 import { DiffHighlight, DiffController } from './diff';
 import { Outline } from './outline';
 import { FindHighlight, FindBar } from './find';
+import { takeSnapshot } from './export';
 import { diffChars } from 'diff';
 
 interface VsCodeApi {
@@ -598,6 +599,9 @@ window.addEventListener('message', (event) => {
       break;
     case 'diffEnd':
       diff?.disable();
+      break;
+    case 'snapshot':
+      vscode.postMessage({ type: 'snapshotTaken', id: msg.id, snapshot: takeSnapshot(outline, diff, !!msg.includeOutline) });
       break;
     case 'syncScroll':
       diff?.syncScroll(msg.anchor, msg.frac, msg.atTop);

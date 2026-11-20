@@ -35,6 +35,10 @@ export function activate(context: vscode.ExtensionContext) {
       provider.setOutlineVisible(!provider.outlineVisible),
     ),
 
+    vscode.commands.registerCommand('mdMaster.export', (uri?: vscode.Uri) =>
+      provider.export(uri instanceof vscode.Uri ? uri : undefined),
+    ),
+
     vscode.commands.registerCommand('mdMaster.openEditor', async (uri?: vscode.Uri) => {
       const target = resolveTargetUri(uri);
       if (!target) return;

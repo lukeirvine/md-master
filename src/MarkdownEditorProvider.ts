@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
+import { buildDiffHtml, buildHtml, type ExportPane, type ExportTheme, type Snapshot } from './htmlExport';
 
 export const VIEW_TYPE = 'mdMaster.editor';
 const OUTLINE_KEY = 'mdMaster.outlineVisible';
@@ -14,7 +15,8 @@ type FromWebview =
   | { type: 'openRaw' }
   | { type: 'outlineVisible'; visible: boolean }
   | { type: 'cursorAt'; id: number; selection: { anchor: SourcePos; head: SourcePos } | null }
-  | { type: 'scroll'; anchor: number; frac: number; atTop: boolean };
+  | { type: 'scroll'; anchor: number; frac: number; atTop: boolean }
+  | { type: 'snapshotTaken'; id: number; snapshot: Snapshot };
 
 type DiffRole = 'original' | 'modified';
 
@@ -35,6 +37,10 @@ interface Session {
   role?: DiffRole;
   /** Where the cursor is in the file's text, once any pending edits have been applied. */
   requestSelection?: () => Promise<vscode.Selection | undefined>;
+  /** A static copy of the rendered page, for exporting. */
+  requestSnapshot?: (includeOutline: boolean) => Promise<Snapshot | undefined>;
+  /** Folder that relative image paths resolve against. */
+  imageDir: vscode.Uri;
 }
 
 function getNonce() {
@@ -129,6 +135,113 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     );
   }
 
+  // ------------------------------------------------------------------ export
+
+  /** The MD Master editor the user is looking at: the focused one, else a visible one for `uri`. */
+  private currentSession(uri?: vscode.Uri): Session | undefined {
+    const ready = [...this.sessions].filter((s) => s.ready);
+    const matches = (s: Session) => !uri || s.document.uri.toString() === uri.toString();
+    return (
+      ready.find((s) => s.panel.active && matches(s)) ??
+      ready.find((s) => s.panel.active) ??
+      ready.find((s) => s.panel.visible && matches(s))
+    );
+  }
+
+  async export(uri?: vscode.Uri) {
+    const session = this.currentSession(uri);
+    if (!session) {
+      vscode.window.showWarningMessage('MD Master: open a Markdown file in MD Master to export it.');
+      return;
+    }
+    const isDiff = !!(session.partner?.ready && session.role);
+
+    const format = await vscode.window.showQuickPick(
+      [{ label: '$(file-code) HTML', description: 'A web page that looks like the editor', id: 'html' as const }],
+      { title: isDiff ? 'Export Diff' : 'Export', placeHolder: 'Choose a format' },
+    );
+    if (!format) return;
+
+    const currentTheme = vscode.workspace.getConfiguration('workbench').get<string>('colorTheme');
+    const themes: (vscode.QuickPickItem & { id: ExportTheme })[] = [
+      { label: '$(color-mode) Current theme', description: currentTheme, id: 'current' },
+      { label: '$(circle-filled) Dark+ (default dark)', id: 'dark' },
+      { label: '$(circle-outline) Light+ (default light)', id: 'light' },
+    ];
+    const theme = await vscode.window.showQuickPick(themes, {
+      title: 'Export to HTML: Theme',
+      placeHolder: 'Choose the colours for the exported page',
+    });
+    if (!theme) return;
+
+    const outlineOption: vscode.QuickPickItem = {
+      label: 'Include outline sidebar',
+      description: isDiff ? 'On the right, like here' : undefined,
+      picked: this.outlineVisible,
+    };
+    const options = await vscode.window.showQuickPick([outlineOption], {
+      title: 'Export to HTML: Options',
+      placeHolder: 'Check the options you want, then press Enter',
+      canPickMany: true,
+    });
+    if (!options) return;
+    const includeOutline = options.includes(outlineOption);
+
+    const name = path.basename(session.document.uri.path).replace(/\.(md|markdown)$/i, '');
+    const realDir = session.imageDir.scheme === 'file' ? session.imageDir : vscode.workspace.workspaceFolders?.[0]?.uri;
+    const fileName = `${name}${isDiff ? '.diff' : ''}.html`;
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: realDir ? vscode.Uri.joinPath(realDir, fileName) : undefined,
+      filters: { HTML: ['html', 'htm'] },
+      saveLabel: 'Export',
+      title: 'Export to HTML',
+    });
+    if (!target) return;
+
+    const html = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'MD Master: exporting…' },
+      async () => {
+        const cssBytes = await vscode.workspace.fs.readFile(
+          vscode.Uri.joinPath(this.context.extensionUri, 'dist', 'webview.css'),
+        );
+        const css = Buffer.from(cssBytes).toString('utf8');
+        const pane = async (s: Session): Promise<ExportPane | undefined> => {
+          const snapshot = await s.requestSnapshot?.(includeOutline);
+          return snapshot && { snapshot, imageDir: s.imageDir };
+        };
+        if (isDiff) {
+          const [orig, mod] = session.role === 'original' ? [session, session.partner!] : [session.partner!, session];
+          const [a, b] = await Promise.all([pane(orig), pane(mod)]);
+          if (!a || !b) return undefined;
+          return buildDiffHtml(
+            a,
+            b,
+            css,
+            `${labelFor(orig.document, mod.document)} ↔ ${labelFor(mod.document, orig.document)}`,
+            theme.id,
+          );
+        }
+        const p = await pane(session);
+        return p && buildHtml(p, css, path.basename(session.document.uri.path), theme.id);
+      },
+    );
+    if (!html) {
+      vscode.window.showErrorMessage('MD Master: export failed (the editor did not respond). Try again.');
+      return;
+    }
+    try {
+      await vscode.workspace.fs.writeFile(target, Buffer.from(html, 'utf8'));
+    } catch (err) {
+      vscode.window.showErrorMessage(`MD Master: couldn't write ${target.fsPath} (${err})`);
+      return;
+    }
+    const open = 'Open in Browser';
+    const reveal = process.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in File Explorer';
+    const pick = await vscode.window.showInformationMessage(`Exported ${path.basename(target.path)}`, open, reveal);
+    if (pick === open) await vscode.env.openExternal(target);
+    else if (pick === reveal) await vscode.commands.executeCommand('revealFileInOS', target);
+  }
+
   // ------------------------------------------------------------------ entry points
 
   async resolveCustomTextEditor(document: vscode.TextDocument, panel: vscode.WebviewPanel): Promise<void> {
@@ -217,6 +330,10 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       ready: false,
       readOnly: !isWritable(document),
       createdAt: Date.now(),
+      imageDir: (() => {
+        const git = gitInfo(document.uri);
+        return git ? vscode.Uri.joinPath(vscode.Uri.file(git.path), '..') : docDir;
+      })(),
     };
     this.sessions.add(session);
     const post = session.post;
@@ -242,11 +359,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const fullRange = () => new vscode.Range(0, 0, document.lineCount, 0);
 
     // Images in a git revision still live next to the real file.
-    const imageBase = () => {
-      const git = gitInfo(document.uri);
-      const dir = git ? vscode.Uri.joinPath(vscode.Uri.file(git.path), '..') : docDir;
-      return webview.asWebviewUri(dir).toString();
-    };
+    const imageBase = () => webview.asWebviewUri(session.imageDir).toString();
 
     const applyText = (text: string) => {
       if (session.readOnly) return editQueue;
@@ -295,6 +408,22 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       }).then(async (sel) => {
         await editQueue;
         return sel;
+      });
+
+    let snapshotId = 0;
+    const snapshotWaiters = new Map<number, (s: Snapshot | undefined) => void>();
+    session.requestSnapshot = (includeOutline) =>
+      new Promise<Snapshot | undefined>((resolve) => {
+        const id = ++snapshotId;
+        const timer = setTimeout(() => {
+          snapshotWaiters.delete(id);
+          resolve(undefined);
+        }, 5000);
+        snapshotWaiters.set(id, (snap) => {
+          clearTimeout(timer);
+          resolve(snap);
+        });
+        post({ type: 'snapshot', id, includeOutline });
       });
 
     disposables.push(
@@ -347,6 +476,10 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
             break;
           case 'outlineVisible':
             await this.setOutlineVisible(msg.visible);
+            break;
+          case 'snapshotTaken':
+            snapshotWaiters.get(msg.id)?.(msg.snapshot);
+            snapshotWaiters.delete(msg.id);
             break;
           case 'scroll':
             if (session.partner?.ready) session.partner.post({ ...msg, type: 'syncScroll' });

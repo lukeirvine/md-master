@@ -296,6 +296,26 @@ export class DiffController {
     this.updateCount(hunks.length + (fmChanged && !hunks.length ? 1 : 0));
   }
 
+  /** What an HTML export needs to reproduce navigation and scroll sync without an editor. */
+  exportInfo(): { role: DiffRole; leaves: (Element | null)[]; otherToOwn: (number | null)[]; hunks: (Element | null)[] } | null {
+    if (!this.role) return null;
+    const view = this.editor.view;
+    const el = (pos: number) => {
+      try {
+        const dom = view.nodeDOM(pos);
+        return dom && dom.nodeType === 1 ? (dom as Element) : null;
+      } catch {
+        return null;
+      }
+    };
+    return {
+      role: this.role,
+      leaves: this.ownLeaves.map((l) => el(l.pos)),
+      otherToOwn: Array.from(this.otherToOwn, (v) => (v === undefined ? null : v)),
+      hunks: this.hunks.map(el),
+    };
+  }
+
   // ---------------------------------------------------------------- bar + navigation
 
   private renderBar(label: string, readOnly: boolean) {
