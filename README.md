@@ -9,7 +9,8 @@ A Notion-style editor for Markdown files in VS Code. You never see markdown synt
 - Type `/` on a new line for the block menu.
 - Hover a block for the `+` (add block below) and `⋮⋮` (drag to move) handles.
 - Click the list icon in the editor title bar (or ⌃⌘O) for an **outline** of every heading. Click one to jump
-  there. The heading you're reading is highlighted, and the sidebar stays open or closed across files and restarts.
+  there. The heading you're reading is highlighted. Toggling it only affects that tab; newly opened files start
+  the way you last left it.
 - Need the raw file? Click the `<>` icon in the editor title bar (or ⌃⌘E), or right-click the file →
   **Open as Raw Markdown**. Your cursor lands in the same spot in the raw text.
 - Back from raw: click the pencil icon in the title bar of any `.md` text editor.

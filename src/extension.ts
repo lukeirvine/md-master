@@ -31,8 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
 
-    vscode.commands.registerCommand('mdMaster.toggleOutline', () =>
-      provider.setOutlineVisible(!provider.outlineVisible),
+    vscode.commands.registerCommand('mdMaster.toggleOutline', (uri?: vscode.Uri) =>
+      provider.toggleOutline(uri instanceof vscode.Uri ? uri : undefined),
     ),
 
     vscode.commands.registerCommand('mdMaster.export', (uri?: vscode.Uri) =>

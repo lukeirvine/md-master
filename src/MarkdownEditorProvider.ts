@@ -41,6 +41,8 @@ interface Session {
   requestSnapshot?: (includeOutline: boolean) => Promise<Snapshot | undefined>;
   /** Folder that relative image paths resolve against. */
   imageDir: vscode.Uri;
+  /** Whether this editor's outline sidebar is open. A diff's two sides share one value. */
+  outlineVisible: boolean;
 }
 
 function getNonce() {
@@ -101,14 +103,23 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 
   private sessions = new Set<Session>();
 
-  get outlineVisible(): boolean {
-    return this.context.globalState.get<boolean>(OUTLINE_KEY, false);
+  /** Toggle the outline of the editor the command came from (its tab's button or the focused one). */
+  toggleOutline(uri?: vscode.Uri) {
+    const s = this.currentSession(uri);
+    if (s) this.setOutlineVisible(s, !s.outlineVisible);
   }
 
-  /** Shared across every MD Master editor, and remembered between sessions. */
-  async setOutlineVisible(visible: boolean) {
-    await this.context.globalState.update(OUTLINE_KEY, visible);
-    for (const s of this.sessions) if (s.ready) s.post({ type: 'outline', visible });
+  /**
+   * Per editor: only `s` (and its diff partner, which shares the one outline) changes.
+   * The last choice is remembered as the starting state for editors opened later.
+   */
+  private setOutlineVisible(s: Session, visible: boolean) {
+    for (const t of [s, s.partner]) {
+      if (!t) continue;
+      t.outlineVisible = visible;
+      if (t.ready) t.post({ type: 'outline', visible });
+    }
+    void this.context.globalState.update(OUTLINE_KEY, visible);
   }
 
   /** The cursor of the MD Master editor for `uri`, if that editor is the active tab. */
@@ -137,14 +148,14 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 
   // ------------------------------------------------------------------ export
 
-  /** The MD Master editor the user is looking at: the focused one, else a visible one for `uri`. */
+  /** The MD Master editor a command is for: the focused one, else a visible one showing `uri`. */
   private currentSession(uri?: vscode.Uri): Session | undefined {
     const ready = [...this.sessions].filter((s) => s.ready);
     const matches = (s: Session) => !uri || s.document.uri.toString() === uri.toString();
     return (
       ready.find((s) => s.panel.active && matches(s)) ??
-      ready.find((s) => s.panel.active) ??
-      ready.find((s) => s.panel.visible && matches(s))
+      (uri ? ready.find((s) => s.panel.visible && matches(s)) : undefined) ??
+      ready.find((s) => s.panel.active)
     );
   }
 
@@ -177,7 +188,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const outlineOption: vscode.QuickPickItem = {
       label: 'Include outline sidebar',
       description: isDiff ? 'On the right, like here' : undefined,
-      picked: this.outlineVisible,
+      picked: session.outlineVisible,
     };
     const options = await vscode.window.showQuickPick([outlineOption], {
       title: 'Export to HTML: Options',
@@ -270,6 +281,11 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     modified.partner = original;
     original.role = 'original';
     modified.role = 'modified';
+    // One outline for the pair: follow the side that shows it
+    if (original.outlineVisible !== modified.outlineVisible) {
+      original.outlineVisible = modified.outlineVisible;
+      if (original.ready) original.post({ type: 'outline', visible: original.outlineVisible });
+    }
     this.sendDiff(original);
     this.sendDiff(modified);
   }
@@ -334,6 +350,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         const git = gitInfo(document.uri);
         return git ? vscode.Uri.joinPath(vscode.Uri.file(git.path), '..') : docDir;
       })(),
+      outlineVisible: this.context.globalState.get<boolean>(OUTLINE_KEY, false),
     };
     this.sessions.add(session);
     const post = session.post;
@@ -438,7 +455,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
               settings: settings(),
               fileName: path.basename(document.uri.path),
               readOnly: session.readOnly,
-              outline: this.outlineVisible,
+              outline: session.outlineVisible,
             });
             this.sendDiff(session);
             break;
@@ -475,7 +492,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
             await vscode.commands.executeCommand('vscode.openWith', document.uri, 'default');
             break;
           case 'outlineVisible':
-            await this.setOutlineVisible(msg.visible);
+            this.setOutlineVisible(session, msg.visible);
             break;
           case 'snapshotTaken':
             snapshotWaiters.get(msg.id)?.(msg.snapshot);
