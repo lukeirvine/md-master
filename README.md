@@ -5,7 +5,7 @@ A Notion-style editor for Markdown files in VS Code. You never see markdown synt
 ## Use it
 
 - Open any `.md` file. It opens in MD Master.
-- Highlight text to get the formatting toolbar (turn into, link, bold, italic, strike, code).
+- Highlight text to get the formatting toolbar (turn into, link, bold, italic, strike, code, color).
 - Type `/` on a new line for the block menu.
 - Hover a block for the `+` (add block below) and `⋮⋮` (drag to move) handles.
 - Click the list icon in the editor title bar (or ⌃⌘O) for an **outline** of every heading. Click one to jump
@@ -33,12 +33,21 @@ This uses VS Code's proposed `customEditorDiffs` API, enabled via `~/.vscode/arg
 (Requires a full VS Code restart.) Without it, git diffs still get highlighted via a fallback,
 but "Compare with…" between two files won't.
 
+## Export
+
+Click the export icon in the editor title bar.
+
+- **HTML**: a self-contained page that looks like the editor. Pick the theme, whether to include the
+  outline, and (if the file has any) whether to keep text colors and highlights.
+- **Raw Markdown**: a copy of the file with the color/highlight comments stripped out.
+
 ## Shortcuts
 
 | Action | Keys |
 | --- | --- |
 | Bold / italic / strike / code | ⌘B / ⌘I / ⌘⇧S / ⌘E |
 | Link | ⌘K |
+| Re-apply last text color / highlight | ⌘⇧H |
 | Heading 1/2/3, Text | ⌘⌥1 / ⌘⌥2 / ⌘⌥3 / ⌘⌥0 |
 | Bulleted / numbered / to-do list | ⌘⇧8 / ⌘⇧7 / ⌘⇧9 |
 | Toggle to-do checkbox | ⌘Enter |
@@ -66,6 +75,10 @@ link colour), so they match the rest of VS Code.
 - The file is only rewritten after you change something. Opening a file never modifies it.
 - Front matter (`---` YAML at the top) is kept and editable under **Properties**.
 - Raw HTML and `<!-- comments -->` are kept as-is (shown as grey blocks).
+- Text colors and highlights are stored as hidden HTML comments around the text, which other
+  markdown renderers don't show: `<!--mm:red-->red<!--/mm-->`, `<!--mm:bg-yellow-->highlighted<!--/mm-->`.
+  On GitHub, a paragraph that *starts* with colored text renders without its inline formatting
+  (bold, links) because the line begins with a comment.
 - Pasted or dropped images are saved to `./assets/` next to the file.
 - On first edit, the file's markdown style gets normalized (e.g. `*` bullets become `-`).
 - Files you can't write to (e.g. an old git revision) open read-only.

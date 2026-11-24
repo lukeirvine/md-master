@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { buildDiffHtml, buildHtml, type ExportPane, type ExportTheme, type Snapshot } from './htmlExport';
+import { stripColorComments } from '../webview/colorSyntax';
 
 export const VIEW_TYPE = 'mdMaster.editor';
 const OUTLINE_KEY = 'mdMaster.outlineVisible';
@@ -38,7 +39,9 @@ interface Session {
   /** Where the cursor is in the file's text, once any pending edits have been applied. */
   requestSelection?: () => Promise<vscode.Selection | undefined>;
   /** A static copy of the rendered page, for exporting. */
-  requestSnapshot?: (includeOutline: boolean) => Promise<Snapshot | undefined>;
+  requestSnapshot?: (includeOutline: boolean, includeColors: boolean) => Promise<Snapshot | undefined>;
+  /** The file's text including edits the webview hasn't sent yet. */
+  requestText?: () => Promise<string>;
   /** Folder that relative image paths resolve against. */
   imageDir: vscode.Uri;
   /** Whether this editor's outline sidebar is open. A diff's two sides share one value. */
@@ -167,11 +170,23 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     }
     const isDiff = !!(session.partner?.ready && session.role);
 
-    const format = await vscode.window.showQuickPick(
-      [{ label: '$(file-code) HTML', description: 'A web page that looks like the editor', id: 'html' as const }],
-      { title: isDiff ? 'Export Diff' : 'Export', placeHolder: 'Choose a format' },
-    );
+    const formats: (vscode.QuickPickItem & { id: 'html' | 'md' })[] = [
+      { label: '$(file-code) HTML', description: 'A web page that looks like the editor', id: 'html' },
+    ];
+    if (!isDiff) {
+      formats.push({
+        label: '$(markdown) Raw Markdown',
+        description: 'A .md file without MD Master-only syntax',
+        detail: 'Strips the hidden comments that store text colors and highlights, leaving plain markdown.',
+        id: 'md',
+      });
+    }
+    const format = await vscode.window.showQuickPick(formats, {
+      title: isDiff ? 'Export Diff' : 'Export',
+      placeHolder: 'Choose a format',
+    });
     if (!format) return;
+    if (format.id === 'md') return this.exportMarkdown(session);
 
     const currentTheme = vscode.workspace.getConfiguration('workbench').get<string>('colorTheme');
     const themes: (vscode.QuickPickItem & { id: ExportTheme })[] = [
@@ -190,13 +205,21 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
       description: isDiff ? 'On the right, like here' : undefined,
       picked: session.outlineVisible,
     };
-    const options = await vscode.window.showQuickPick([outlineOption], {
+    // Only offered when there's something to strip
+    const hasColors = [session, session.partner].some((s) => s && /<!--mm:/.test(s.document.getText()));
+    const colorsOption: vscode.QuickPickItem = {
+      label: 'Include text colors & highlights',
+      description: 'Off: exported as plain text',
+      picked: true,
+    };
+    const options = await vscode.window.showQuickPick(hasColors ? [outlineOption, colorsOption] : [outlineOption], {
       title: 'Export to HTML: Options',
       placeHolder: 'Check the options you want, then press Enter',
       canPickMany: true,
     });
     if (!options) return;
     const includeOutline = options.includes(outlineOption);
+    const includeColors = options.includes(colorsOption);
 
     const name = path.basename(session.document.uri.path).replace(/\.(md|markdown)$/i, '');
     const realDir = session.imageDir.scheme === 'file' ? session.imageDir : vscode.workspace.workspaceFolders?.[0]?.uri;
@@ -217,7 +240,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
         );
         const css = Buffer.from(cssBytes).toString('utf8');
         const pane = async (s: Session): Promise<ExportPane | undefined> => {
-          const snapshot = await s.requestSnapshot?.(includeOutline);
+          const snapshot = await s.requestSnapshot?.(includeOutline, includeColors);
           return snapshot && { snapshot, imageDir: s.imageDir };
         };
         if (isDiff) {
@@ -250,6 +273,32 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
     const reveal = process.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in File Explorer';
     const pick = await vscode.window.showInformationMessage(`Exported ${path.basename(target.path)}`, open, reveal);
     if (pick === open) await vscode.env.openExternal(target);
+    else if (pick === reveal) await vscode.commands.executeCommand('revealFileInOS', target);
+  }
+
+  /** A copy of the file with MD Master-only syntax (color comments) removed. */
+  private async exportMarkdown(session: Session) {
+    const name = path.basename(session.document.uri.path).replace(/\.(md|markdown)$/i, '');
+    const realDir = session.imageDir.scheme === 'file' ? session.imageDir : vscode.workspace.workspaceFolders?.[0]?.uri;
+    const fileName = `${name}.raw.md`;
+    const target = await vscode.window.showSaveDialog({
+      defaultUri: realDir ? vscode.Uri.joinPath(realDir, fileName) : undefined,
+      filters: { Markdown: ['md', 'markdown'] },
+      saveLabel: 'Export',
+      title: 'Export to Raw Markdown',
+    });
+    if (!target) return;
+    const text = (await session.requestText?.()) ?? session.document.getText();
+    try {
+      await vscode.workspace.fs.writeFile(target, Buffer.from(stripColorComments(text), 'utf8'));
+    } catch (err) {
+      vscode.window.showErrorMessage(`MD Master: couldn't write ${target.fsPath} (${err})`);
+      return;
+    }
+    const open = 'Open';
+    const reveal = process.platform === 'darwin' ? 'Reveal in Finder' : 'Reveal in File Explorer';
+    const pick = await vscode.window.showInformationMessage(`Exported ${path.basename(target.path)}`, open, reveal);
+    if (pick === open) await vscode.commands.executeCommand('vscode.open', target);
     else if (pick === reveal) await vscode.commands.executeCommand('revealFileInOS', target);
   }
 
@@ -429,7 +478,7 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
 
     let snapshotId = 0;
     const snapshotWaiters = new Map<number, (s: Snapshot | undefined) => void>();
-    session.requestSnapshot = (includeOutline) =>
+    session.requestSnapshot = (includeOutline, includeColors) =>
       new Promise<Snapshot | undefined>((resolve) => {
         const id = ++snapshotId;
         const timer = setTimeout(() => {
@@ -440,8 +489,14 @@ export class MarkdownEditorProvider implements vscode.CustomTextEditorProvider {
           clearTimeout(timer);
           resolve(snap);
         });
-        post({ type: 'snapshot', id, includeOutline });
+        post({ type: 'snapshot', id, includeOutline, includeColors });
       });
+
+    session.requestText = async () => {
+      const text = await requestFlush();
+      await editQueue;
+      return text ?? document.getText();
+    };
 
     disposables.push(
       webview.onDidReceiveMessage(async (msg: FromWebview) => {

@@ -65,7 +65,7 @@ const STRIP_CLASSES = [
   'mm-find-current',
 ];
 
-function cleanPage(live: HTMLElement, clone: HTMLElement) {
+function cleanPage(live: HTMLElement, clone: HTMLElement, includeColors: boolean) {
   clone.querySelectorAll('.drag-handle, .block-plus, .ProseMirror-gapcursor').forEach((el) => el.remove());
   clone.querySelectorAll('*').forEach((el) => {
     for (const a of ['contenteditable', 'tabindex', 'translate', 'spellcheck', 'draggable', 'data-placeholder', 'role']) {
@@ -93,6 +93,11 @@ function cleanPage(live: HTMLElement, clone: HTMLElement) {
     ta.style.removeProperty('height');
   });
 
+  // Text colors and highlights: unwrap them if the export shouldn't have them
+  if (!includeColors) {
+    clone.querySelectorAll('span[data-color], span[data-bg]').forEach((span) => span.replaceWith(...Array.from(span.childNodes)));
+  }
+
   // Images: hand the extension the markdown path (it inlines local files)
   clone.querySelectorAll('img[data-md-src]').forEach((img) => {
     img.setAttribute('src', img.getAttribute('data-md-src')!);
@@ -115,7 +120,12 @@ function cleanPage(live: HTMLElement, clone: HTMLElement) {
   });
 }
 
-export function takeSnapshot(outline: Outline | null, diff: DiffController | null, includeOutline: boolean): Snapshot {
+export function takeSnapshot(
+  outline: Outline | null,
+  diff: DiffController | null,
+  includeOutline: boolean,
+  includeColors: boolean,
+): Snapshot {
   const page = document.getElementById('page')!;
   const pageClone = page.cloneNode(true) as HTMLElement;
 
@@ -126,7 +136,7 @@ export function takeSnapshot(outline: Outline | null, diff: DiffController | nul
     tag(page, pageClone, info.leaves, 'data-mm-leaf');
     tag(page, pageClone, info.hunks, 'data-mm-hunk');
   }
-  cleanPage(page, pageClone);
+  cleanPage(page, pageClone, includeColors);
 
   let outlineHtml = '';
   const ol = document.getElementById('outline');

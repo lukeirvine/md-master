@@ -24,6 +24,25 @@
   --mm-selection: rgba(35, 131, 226, 0.28);
   --mm-pop-bg: #ffffff;
   --mm-pop-shadow: rgba(15, 15, 15, 0.05) 0 0 0 1px, rgba(15, 15, 15, 0.1) 0 3px 6px, rgba(15, 15, 15, 0.2) 0 9px 24px;
+  /* text colors & highlights (Notion's palette) */
+  --mm-gray: #787774;
+  --mm-gray-bg: #f1f1ef;
+  --mm-brown: #9f6b53;
+  --mm-brown-bg: #f4eeee;
+  --mm-orange: #d9730d;
+  --mm-orange-bg: #fbecdd;
+  --mm-yellow: #cb912f;
+  --mm-yellow-bg: #fbf3db;
+  --mm-green: #448361;
+  --mm-green-bg: #edf3ec;
+  --mm-blue: #337ea9;
+  --mm-blue-bg: #e7f3f8;
+  --mm-purple: #9065b0;
+  --mm-purple-bg: #f6f3f9;
+  --mm-pink: #c14c8a;
+  --mm-pink-bg: #faf1f5;
+  --mm-red: #d44c47;
+  --mm-red-bg: #fdebec;
 }
 
 body.vscode-dark,
@@ -44,6 +63,24 @@ body.vscode-high-contrast:not(.vscode-high-contrast-light) {
   --mm-selection: rgba(35, 131, 226, 0.4);
   --mm-pop-bg: #252525;
   --mm-pop-shadow: rgba(0, 0, 0, 0.3) 0 0 0 1px, rgba(0, 0, 0, 0.3) 0 3px 6px, rgba(0, 0, 0, 0.45) 0 9px 24px;
+  --mm-gray: #9b9b9b;
+  --mm-gray-bg: #2f2f2f;
+  --mm-brown: #ba856f;
+  --mm-brown-bg: #4a3228;
+  --mm-orange: #c77d48;
+  --mm-orange-bg: #5c3b23;
+  --mm-yellow: #ca9849;
+  --mm-yellow-bg: #564328;
+  --mm-green: #529e72;
+  --mm-green-bg: #243d30;
+  --mm-blue: #5e87c9;
+  --mm-blue-bg: #143a4e;
+  --mm-purple: #9d68d3;
+  --mm-purple-bg: #3c2d49;
+  --mm-pink: #d15796;
+  --mm-pink-bg: #4e2c3c;
+  --mm-red: #df5452;
+  --mm-red-bg: #522e2a;
 }
 
 /* ============================================================ page */
@@ -611,6 +648,59 @@ body.mod-down .ProseMirror a {
 .bm-text-btn.primary:hover {
   background: var(--mm-accent);
   filter: brightness(1.08);
+}
+
+/* --- color picker */
+.bubble-menu[data-mode="color"] {
+  height: auto;
+  overflow: visible;
+}
+.bm-color-a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 20px;
+  padding: 0 1px;
+  border-radius: 3px;
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.bm-color svg {
+  opacity: 0.6;
+}
+.bm-color-panel {
+  padding: 4px 6px 8px;
+}
+.bm-color-panel .menu-heading {
+  padding: 6px 4px 4px;
+}
+.bm-swatches {
+  display: flex;
+  gap: 2px;
+}
+.bm-swatch.bm-btn {
+  min-width: 0;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 4px;
+}
+.bm-swatch.current {
+  box-shadow: inset 0 0 0 2px var(--mm-accent);
+}
+.sw {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  box-sizing: border-box;
+  border-radius: 3px;
+  border: 1px solid var(--mm-border);
+  font-weight: 500;
+  font-size: 14px;
 }
 
 /* --- shared menu list */
@@ -1242,4 +1332,70 @@ body.diff-modified.outline-open #findbar {
 .mm-find-current {
   background: var(--vscode-editor-findMatchBackground, rgba(255, 150, 50, 0.7));
   outline: 1px solid var(--vscode-editor-findMatchBorder, transparent);
+}
+
+/* ============================================================ text colors & highlights */
+
+[data-color="gray"] {
+  color: var(--mm-gray);
+}
+[data-color="brown"] {
+  color: var(--mm-brown);
+}
+[data-color="orange"] {
+  color: var(--mm-orange);
+}
+[data-color="yellow"] {
+  color: var(--mm-yellow);
+}
+[data-color="green"] {
+  color: var(--mm-green);
+}
+[data-color="blue"] {
+  color: var(--mm-blue);
+}
+[data-color="purple"] {
+  color: var(--mm-purple);
+}
+[data-color="pink"] {
+  color: var(--mm-pink);
+}
+[data-color="red"] {
+  color: var(--mm-red);
+}
+[data-bg="gray"] {
+  background: var(--mm-gray-bg);
+}
+[data-bg="brown"] {
+  background: var(--mm-brown-bg);
+}
+[data-bg="orange"] {
+  background: var(--mm-orange-bg);
+}
+[data-bg="yellow"] {
+  background: var(--mm-yellow-bg);
+}
+[data-bg="green"] {
+  background: var(--mm-green-bg);
+}
+[data-bg="blue"] {
+  background: var(--mm-blue-bg);
+}
+[data-bg="purple"] {
+  background: var(--mm-purple-bg);
+}
+[data-bg="pink"] {
+  background: var(--mm-pink-bg);
+}
+[data-bg="red"] {
+  background: var(--mm-red-bg);
+}
+.ProseMirror span[data-bg] {
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+/* bold and links inside colored text take its color instead of their theme color */
+.ProseMirror span[data-color] :is(strong, a) {
+  color: inherit;
 }

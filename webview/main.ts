@@ -15,6 +15,7 @@ import { MdText } from './escaping';
 import { DiffHighlight, DiffController } from './diff';
 import { Outline } from './outline';
 import { FindHighlight, FindBar } from './find';
+import { TextColor, TextBackground } from './colors';
 import { takeSnapshot } from './export';
 import { diffChars } from 'diff';
 
@@ -402,6 +403,8 @@ function createEditor(body: string) {
       MdImage.configure({ inline: false, allowBase64: true }),
       RawHtmlBlock,
       RawHtmlInline,
+      TextColor,
+      TextBackground,
       Placeholder.configure({
         includeChildren: true,
         showOnlyCurrent: true,
@@ -601,7 +604,7 @@ window.addEventListener('message', (event) => {
       diff?.disable();
       break;
     case 'snapshot':
-      vscode.postMessage({ type: 'snapshotTaken', id: msg.id, snapshot: takeSnapshot(outline, diff, !!msg.includeOutline) });
+      vscode.postMessage({ type: 'snapshotTaken', id: msg.id, snapshot: takeSnapshot(outline, diff, !!msg.includeOutline, msg.includeColors !== false) });
       break;
     case 'syncScroll':
       diff?.syncScroll(msg.anchor, msg.frac, msg.atTop);

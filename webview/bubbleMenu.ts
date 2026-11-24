@@ -1,8 +1,9 @@
 import type { Editor } from '@tiptap/core';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
 import { BLOCKS, ICONS, currentBlockId } from './blocks';
+import { COLORS, applyColor, currentColors, type ColorKind, type ColorName } from './colors';
 
-type Mode = 'format' | 'link' | 'turnInto';
+type Mode = 'format' | 'link' | 'turnInto' | 'color';
 
 const isMac = navigator.platform.toLowerCase().includes('mac');
 const mod = isMac ? '⌘' : 'Ctrl+';
@@ -126,6 +127,7 @@ export class BubbleMenu {
     this.el.dataset.mode = this.mode;
     if (this.mode === 'format') this.renderFormat();
     else if (this.mode === 'link') this.renderLink();
+    else if (this.mode === 'color') this.renderColor();
     else this.renderTurnInto();
   }
 
@@ -157,6 +159,14 @@ export class BubbleMenu {
       this.el.appendChild(b);
     }
 
+    const color = this.btn(`<span class="bm-color-a">A</span>${ICONS.chevron}`, `Text color & highlight (${mod}⇧H repeats the last one)`, () => {
+      this.mode = 'color';
+      this.render();
+      this.position();
+    }, 'bm-color');
+    color.dataset.role = 'color';
+    this.el.append(this.sep(), color);
+
     if (e.state.selection instanceof NodeSelection) {
       this.el.append(this.sep(), this.btn(ICONS.trash, 'Delete block', () => e.chain().focus().deleteSelection().run()));
     }
@@ -170,6 +180,48 @@ export class BubbleMenu {
     });
     const label = this.el.querySelector('[data-role=turn] .bm-label');
     if (label) label.textContent = BLOCKS.find((b) => b.id === currentBlockId(e))!.title;
+    const a = this.el.querySelector<HTMLElement>('[data-role=color] .bm-color-a');
+    if (a) {
+      const { color, bg } = currentColors(e);
+      a.toggleAttribute('data-color', !!color);
+      if (color) a.dataset.color = color;
+      a.toggleAttribute('data-bg', !!bg);
+      if (bg) a.dataset.bg = bg;
+    }
+  }
+
+  private renderColor() {
+    const e = this.editor;
+    const current = currentColors(e);
+    const panel = document.createElement('div');
+    panel.className = 'bm-color-panel';
+    const name = (c: ColorName | null) => (c ? c[0].toUpperCase() + c.slice(1) : 'Default');
+    const sections: [ColorKind, string][] = [
+      ['color', 'Text color'],
+      ['bg', 'Background color'],
+    ];
+    for (const [kind, title] of sections) {
+      const heading = document.createElement('div');
+      heading.className = 'menu-heading';
+      heading.textContent = title;
+      const row = document.createElement('div');
+      row.className = 'bm-swatches';
+      for (const c of [null, ...COLORS]) {
+        const attr = kind === 'color' ? 'data-color' : 'data-bg';
+        const inner = `<span class="sw sw-${kind}"${c ? ` ${attr}="${c}"` : ''}>${kind === 'color' ? 'A' : ''}</span>`;
+        const label = kind === 'color' ? name(c) : c ? `${name(c)} background` : 'No background';
+        const b = this.btn(inner, label, () => {
+          applyColor(e, kind, c);
+          this.mode = 'format';
+          this.render();
+          this.position();
+        }, 'bm-swatch');
+        if (current[kind] === c) b.classList.add('current');
+        row.appendChild(b);
+      }
+      panel.append(heading, row);
+    }
+    this.el.appendChild(panel);
   }
 
   private renderLink() {
@@ -275,7 +327,7 @@ export class BubbleMenu {
     let top = rect.top - h - gap;
     if (top < gap) top = rect.bottom + gap;
     if (this.mode === 'turnInto' && top + h > window.innerHeight - gap) top = Math.max(gap, rect.top - h - gap);
-    const center = this.mode === 'format' || this.mode === 'link' ? (rect.left + rect.right) / 2 - w / 2 : rect.left;
+    const center = this.mode !== 'turnInto' ? (rect.left + rect.right) / 2 - w / 2 : rect.left;
     const left = Math.max(gap, Math.min(center, window.innerWidth - w - gap));
     this.el.style.top = `${top}px`;
     this.el.style.left = `${left}px`;
