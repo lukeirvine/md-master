@@ -112,7 +112,7 @@ body.ready {
 #page {
   max-width: var(--mm-max-width);
   margin: 0 auto;
-  padding: 64px 72px 40vh;
+  padding: 64px 24px 40vh;
   box-sizing: border-box;
   min-height: 100vh;
   cursor: text;
@@ -120,7 +120,7 @@ body.ready {
 
 @media (max-width: 600px) {
   #page {
-    padding: 32px 40px 40vh;
+    padding-top: 32px;
   }
 }
 
