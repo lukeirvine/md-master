@@ -112,7 +112,9 @@ body.ready {
 #page {
   max-width: var(--mm-max-width);
   margin: 0 auto;
-  padding: 64px 24px 40vh;
+  /* 48px sides: the plus button + drag handle sit 42px left of each block
+     (20px handle via dragHandleWidth, then 22px plus) — see main.ts */
+  padding: 64px 48px 40vh;
   box-sizing: border-box;
   min-height: 100vh;
   cursor: text;
@@ -120,7 +122,8 @@ body.ready {
 
 @media (max-width: 600px) {
   #page {
-    padding-top: 32px;
+    /* block handles are hidden at this width, so no room needed for them */
+    padding: 32px 24px 40vh;
   }
 }
 
